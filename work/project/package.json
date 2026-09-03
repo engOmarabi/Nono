@@ -1,0 +1,13 @@
+{
+  "name": "haqiba-episode-pipeline",
+  "version": "1.0.0",
+  "description": "Data-driven generator for حكايات الحقيبة episode scripts (Word docs) from JSON episode data.",
+  "private": true,
+  "scripts": {
+    "generate": "node tools/generate_episode.js --all --out output",
+    "generate:one": "node tools/generate_episode.js"
+  },
+  "dependencies": {
+    "docx": "^9.7.1"
+  }
+}
