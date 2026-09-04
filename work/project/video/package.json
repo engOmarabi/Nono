@@ -1,0 +1,22 @@
+{
+  "name": "haqiba-episode-video-poc",
+  "version": "0.1.0",
+  "description": "Proof-of-concept: renders episodes_data/episode-*.json into an exported .mp4 using Remotion.",
+  "private": true,
+  "scripts": {
+    "manifest": "node scripts/generate-manifest.mjs",
+    "studio": "npm run manifest && remotion studio src/index.ts",
+    "render": "npm run manifest && remotion render src/index.ts Episode out/episode.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "@remotion/google-fonts": "4.0.520",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.520"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.11",
+    "typescript": "5.6.3"
+  }
+}
