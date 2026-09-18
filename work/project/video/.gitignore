@@ -3,5 +3,7 @@ out/
 .env
 .env.local
 public/audio/*.mp3
+public/audio/*.wav
 public/music/*.mp3
+public/music/*.wav
 public/manifest.json

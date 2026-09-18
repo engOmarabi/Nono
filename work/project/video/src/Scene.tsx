@@ -8,11 +8,15 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/Cairo";
 import type { SceneRange } from "./timing";
 import manifest from "../public/manifest.json";
 
-const { fontFamily } = loadFont();
+// Amiri + Noto Sans Arabic are installed as system fonts in this environment
+// (apt: fonts-hosny-amiri, fonts-noto-core) rather than loaded from Google
+// Fonts, since this sandbox's network egress is allowlisted and doesn't
+// include fonts.gstatic.com's TLS chain. Amiri fits the series' classical
+// Arabic-poetry subject matter; Noto Sans Arabic is the fallback.
+const fontFamily = "Amiri, 'Noto Sans Arabic', sans-serif";
 
 // Same palette as tools/generate_episode.js (BRAND_COLOR / BOX_SHADE), so the
 // video and the .docx scripts read as the same series.

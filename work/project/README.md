@@ -14,6 +14,7 @@ episodes_data/
 tools/
   generate_episode.js ← the only file that controls formatting/layout
 output/                ← generated .docx files land here (gitignored)
+video/                 ← Remotion PoC: renders an episode-*.json into an .mp4 (see below)
 ```
 
 ## Quick start
@@ -49,6 +50,63 @@ node tools/generate_episode.js --data episodes_data/episode-05.json --out output
 - **Sources are per-episode, not centralized**, because a claim's citation
   needs to travel with the claim when scripts get revised independently.
 
+## Video pipeline (proof of concept)
+
+`video/` is a separate Remotion project that renders one episode's JSON
+straight into a narrated `.mp4` — the same source-of-truth `episodes_data/*.json`
+files, a second consumer. It does not touch `tools/generate_episode.js` or
+the `.docx` output.
+
+```
+video/
+  src/timing.ts        ← parses "mm:ss–mm:ss" into frame ranges (fps=30)
+  src/Scene.tsx         ← one scene = title/visual text + narration caption + timecode chip
+  src/Episode.tsx        ← <Series> of scenes + optional background music bed
+  src/Root.tsx            ← registers the "Episode" composition (currently wired to episode-01.json)
+  scripts/generate_narration.py ← calls Gemini TTS per scene, writes public/audio/scene-N.wav
+  scripts/generate-manifest.mjs ← scans public/audio + public/music, writes public/manifest.json
+  public/manifest.json          ← which narration/music files actually exist (gitignored, regenerated)
+```
+
+Quick start:
+
+```
+cd video
+npm install
+GEMINI_API_KEY=... python3 scripts/generate_narration.py ../episodes_data/episode-01.json
+npm run render        # runs the manifest script, then renders out/episode.mp4
+```
+
+**Design notes / environment-specific choices (read before changing):**
+
+- **Narration is Gemini's native TTS** (`gemini-2.5-flash-preview-tts`, model
+  `Kore` voice), called directly over HTTPS with a plain API key
+  (`x-goog-api-key`/`?key=`) — not the older Cloud Text-to-Speech API, which
+  in this project's GCP org requires OAuth/service-account credentials
+  instead of a simple key. Get a key at aistudio.google.com, not
+  console.cloud.google.com.
+- **Fonts are local, not Google Fonts.** `Scene.tsx` sets `fontFamily` to
+  `Amiri, 'Noto Sans Arabic', sans-serif` (installed via
+  `apt install fonts-hosny-amiri fonts-noto-core`) instead of
+  `@remotion/google-fonts/Cairo`, because this environment's network egress
+  is allowlisted and doesn't include `fonts.gstatic.com`'s cert chain. If you
+  render somewhere with normal internet access, either font strategy works —
+  keep this one for portability unless you have a reason not to.
+- **Chromium**: `remotion.config.ts` points `browserExecutable` at this
+  environment's pre-installed headless shell instead of letting Remotion
+  download its own (the default download host isn't in the network
+  allowlist here). On a machine with normal internet access, delete that
+  config line and Remotion will download its own Chromium on first render.
+- **Background music is not wired up yet.** `Episode.tsx` already supports it
+  (`public/manifest.json.music`, looped under the narration) — it's a matter
+  of dropping a royalty-free track (Pixabay Music / YouTube Audio Library)
+  into `public/music/` and re-running `npm run manifest`. Both of those
+  sites were unreachable from this sandbox at the time of the PoC, so this
+  step is left for an environment with normal internet access.
+- **Generated audio/video are gitignored** (`public/audio/*.wav`,
+  `public/manifest.json`, `out/`), same principle as `output/*.docx` in the
+  main pipeline: only source is committed, artifacts are regenerated.
+
 ## Known gotchas (hit during original authoring)
 
 - Nested straight quotes inside a JS string literal break `eval`/`require` —
@@ -62,10 +120,16 @@ node tools/generate_episode.js --data episodes_data/episode-05.json --out output
 
 ## Suggested next steps for Claude Code
 
-- Add a `--check` mode that validates every `episode-*.json` against
-  `SCHEMA.md` (required fields present, `scenes` timecodes chronological,
-  `sources`/`productionNotes` non-empty) and reports problems without
-  generating anything — useful as a pre-commit hook.
+- ~~Add a `--check` mode...~~ done — `node tools/generate_episode.js --check`
+  validates every `episode-*.json` against `SCHEMA.md` (required fields,
+  chronological scene timecodes, non-empty `sources`/`productionNotes`)
+  without generating anything.
+- Source a background-music bed per episode and wire it into
+  `video/public/music/` (see "Video pipeline" above — blocked in the PoC's
+  sandbox, not a code limitation).
+- Extend `video/src/Root.tsx` to render any `episode-*.json`, not just
+  episode 1, once the visual/narration/music approach is approved for the
+  full series.
 - Add a `summary` command that regenerates the series index
   (`فهرس-السلسلة-الكامل.docx`) directly from `episodes_data/*.json` instead
   of the separate hand-maintained script that currently builds it, so the
