@@ -22,7 +22,74 @@ const fontFamily = "Amiri, 'Noto Sans Arabic', sans-serif";
 // video and the .docx scripts read as the same series.
 const BRAND_COLOR = "#8A5A2B";
 const BOX_SHADE = "#F3E9DA";
-const INK = "#2A1D10";
+
+function Word({
+  text,
+  frame,
+  delay,
+}: {
+  text: string;
+  frame: number;
+  delay: number;
+}) {
+  const local = frame - delay;
+  const opacity = interpolate(local, [0, 12], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const translateY = interpolate(local, [0, 12], [18, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        opacity,
+        transform: `translateY(${translateY}px)`,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+// Soft, slowly drifting blobs behind the text so a held scene never reads as
+// a frozen slide — continuous motion for the entire scene duration, not just
+// during the entrance.
+function AmbientBackground({ frame, seed, duration }: { frame: number; seed: number; duration: number }) {
+  const t = frame / Math.max(duration, 1);
+  const blobs = [
+    { baseX: 20, baseY: 25, size: 620, drift: 60, dir: 1 },
+    { baseX: 78, baseY: 70, size: 520, drift: 50, dir: -1 },
+    { baseX: 55, baseY: 15, size: 420, drift: 40, dir: 1 },
+  ];
+  return (
+    <AbsoluteFill style={{ overflow: "hidden" }}>
+      {blobs.map((b, i) => {
+        const phase = seed * 1.7 + i * 2.1;
+        const x = b.baseX + Math.sin(t * Math.PI * 2 * b.dir + phase) * (b.drift / 20);
+        const y = b.baseY + Math.cos(t * Math.PI * 2 * b.dir + phase) * (b.drift / 28);
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: `${x}%`,
+              top: `${y}%`,
+              width: b.size,
+              height: b.size,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 70%)",
+              transform: "translate(-50%, -50%)",
+            }}
+          />
+        );
+      })}
+    </AbsoluteFill>
+  );
+}
 
 export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
   scene,
@@ -40,8 +107,23 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
           extrapolateRight: "clamp",
         })
       : 1;
-  const opacity = Math.min(entrance, exit);
-  const translateY = interpolate(entrance, [0, 1], [24, 0]);
+  const chromeOpacity = Math.min(entrance, exit);
+
+  // Narration caption slides in a beat after the visual text starts, so the
+  // two layers read as sequential motion rather than one flat fade.
+  const captionDelay = 10;
+  const captionLocal = Math.max(frame - captionDelay, 0);
+  const captionEntrance = spring({
+    frame: captionLocal,
+    fps,
+    config: { damping: 200 },
+    durationInFrames: 20,
+  });
+  const captionOpacity = Math.min(captionEntrance, exit);
+  const captionTranslateY = interpolate(captionEntrance, [0, 1], [40, 0]);
+
+  const words = scene.visual.split(" ");
+  const staggerFrames = 2.5;
 
   const narrationSrc = manifest.narration[String(scene.index + 1)];
 
@@ -55,12 +137,17 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
     >
       {narrationSrc ? <Audio src={staticFile(narrationSrc)} /> : null}
 
-      {/* timecode chip — forced LTR, matching the tcCell() convention in generate_episode.js */}
+      <AmbientBackground frame={frame} seed={scene.index} duration={scene.durationInFrames} />
+
+      {/* timecode chip — forced LTR, matching the tcCell() convention in generate_episode.js.
+          Physical `left`, not `insetInlineStart`: under this component's direction:rtl,
+          the logical property would resolve to the right edge and collide with the
+          episode label on the other side. */}
       <div
         style={{
           position: "absolute",
           top: 40,
-          insetInlineStart: 48,
+          left: 48,
           direction: "ltr",
           background: "rgba(0,0,0,0.25)",
           color: BOX_SHADE,
@@ -69,6 +156,7 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
           fontSize: 28,
           fontWeight: 700,
           letterSpacing: 1,
+          opacity: chromeOpacity,
         }}
       >
         {scene.timecode}
@@ -78,27 +166,31 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
         style={{
           position: "absolute",
           top: 40,
-          insetInlineEnd: 48,
+          right: 48,
           color: BOX_SHADE,
           fontSize: 26,
-          opacity: 0.85,
+          opacity: chromeOpacity * 0.85,
         }}
       >
         حكايات الحقيبة — الحلقة {episodeNumber}
       </div>
 
-      {/* primary "visual" description — stands in for illustrated scene art in this PoC */}
+      {/* primary "visual" description — stands in for illustrated scene art in this PoC;
+          revealed word by word so the scene keeps moving through its whole entrance,
+          not just as a single instant fade. */}
       <AbsoluteFill
         style={{
           justifyContent: "center",
           alignItems: "center",
           padding: "0 160px",
-          opacity,
-          transform: `translateY(${translateY}px)`,
         }}
       >
         <div
           style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "0 14px",
             color: BOX_SHADE,
             fontSize: 40,
             lineHeight: 1.6,
@@ -106,7 +198,9 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
             fontWeight: 600,
           }}
         >
-          {scene.visual}
+          {words.map((w, i) => (
+            <Word key={i} text={w} frame={frame} delay={i * staggerFrames} />
+          ))}
         </div>
       </AbsoluteFill>
 
@@ -115,8 +209,8 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
         style={{
           position: "absolute",
           bottom: 130,
-          insetInlineStart: 100,
-          insetInlineEnd: 100,
+          left: 100,
+          right: 100,
           background: "rgba(0,0,0,0.35)",
           color: "#ffffff",
           borderRadius: 14,
@@ -124,7 +218,8 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
           fontSize: 30,
           lineHeight: 1.6,
           textAlign: "center",
-          opacity,
+          opacity: captionOpacity,
+          transform: `translateY(${captionTranslateY}px)`,
         }}
       >
         {scene.narration}
@@ -135,10 +230,10 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
         style={{
           position: "absolute",
           bottom: 40,
-          insetInlineStart: 48,
+          left: 48,
           color: BOX_SHADE,
           fontSize: 22,
-          opacity: 0.75,
+          opacity: chromeOpacity * 0.75,
         }}
       >
         ♪ {scene.music}
