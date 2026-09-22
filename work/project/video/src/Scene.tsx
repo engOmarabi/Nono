@@ -10,6 +10,8 @@ import {
 } from "remotion";
 import type { SceneRange } from "./timing";
 import manifest from "../public/manifest.json";
+import { ICONS } from "./icons";
+import { SCENE_ICONS } from "./sceneVisuals";
 
 // Amiri + Noto Sans Arabic are installed as system fonts in this environment
 // (apt: fonts-hosny-amiri, fonts-noto-core) rather than loaded from Google
@@ -23,34 +25,40 @@ const fontFamily = "Amiri, 'Noto Sans Arabic', sans-serif";
 const BRAND_COLOR = "#8A5A2B";
 const BOX_SHADE = "#F3E9DA";
 
-function Word({
-  text,
+// One scene-art icon: scales/fades in (staggered when a scene has more than
+// one), then floats gently in place for the rest of the scene so it never
+// sits fully still.
+function SceneIcon({
+  iconKey,
   frame,
   delay,
+  floatSeed,
 }: {
-  text: string;
+  iconKey: keyof typeof ICONS;
   frame: number;
   delay: number;
+  floatSeed: number;
 }) {
+  const Icon = ICONS[iconKey];
   const local = frame - delay;
-  const opacity = interpolate(local, [0, 12], [0, 1], {
+  const scale = interpolate(local, [0, 18], [0.7, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const translateY = interpolate(local, [0, 12], [18, 0], {
+  const opacity = interpolate(local, [0, 18], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const floatY = Math.sin(frame / 40 + floatSeed) * 8;
   return (
-    <span
+    <div
       style={{
-        display: "inline-block",
         opacity,
-        transform: `translateY(${translateY}px)`,
+        transform: `scale(${scale}) translateY(${floatY}px)`,
       }}
     >
-      {text}
-    </span>
+      <Icon size={180} />
+    </div>
   );
 }
 
@@ -122,8 +130,7 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
   const captionOpacity = Math.min(captionEntrance, exit);
   const captionTranslateY = interpolate(captionEntrance, [0, 1], [40, 0]);
 
-  const words = scene.visual.split(" ");
-  const staggerFrames = 2.5;
+  const icons = SCENE_ICONS[episodeNumber]?.[scene.index] ?? [];
 
   const narrationSrc = manifest.narration[String(scene.index + 1)];
 
@@ -175,33 +182,20 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
         حكايات الحقيبة — الحلقة {episodeNumber}
       </div>
 
-      {/* primary "visual" description — stands in for illustrated scene art in this PoC;
-          revealed word by word so the scene keeps moving through its whole entrance,
-          not just as a single instant fade. */}
+      {/* Scene art: icon(s) standing in for illustrated/animated artwork (see
+          icons.tsx / sceneVisuals.ts) — never the raw `visual` field, which is
+          a director's note for an illustrator, not on-screen content. */}
       <AbsoluteFill
         style={{
           justifyContent: "center",
           alignItems: "center",
-          padding: "0 160px",
+          gap: 48,
+          flexDirection: "row",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: "0 14px",
-            color: BOX_SHADE,
-            fontSize: 40,
-            lineHeight: 1.6,
-            textAlign: "center",
-            fontWeight: 600,
-          }}
-        >
-          {words.map((w, i) => (
-            <Word key={i} text={w} frame={frame} delay={i * staggerFrames} />
-          ))}
-        </div>
+        {icons.map((key, i) => (
+          <SceneIcon key={key} iconKey={key} frame={frame} delay={i * 8} floatSeed={scene.index * 1.3 + i} />
+        ))}
       </AbsoluteFill>
 
       {/* narration caption — what the voice-over says for this scene */}
