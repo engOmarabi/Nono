@@ -2,6 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  Img,
   interpolate,
   spring,
   staticFile,
@@ -12,6 +13,7 @@ import type { SceneRange } from "./timing";
 import manifest from "../public/manifest.json";
 import { ICONS } from "./icons";
 import { SCENE_ICONS } from "./sceneVisuals";
+import { SCENE_IMAGES } from "./sceneImages";
 
 // Amiri + Noto Sans Arabic are installed as system fonts in this environment
 // (apt: fonts-hosny-amiri, fonts-noto-core) rather than loaded from Google
@@ -59,6 +61,37 @@ function SceneIcon({
     >
       <Icon size={180} />
     </div>
+  );
+}
+
+// Generated illustration filling the frame, with a slow continuous Ken Burns
+// zoom so a held scene keeps moving even though the image itself is static.
+// A soft top/bottom gradient keeps the timecode chip and narration caption
+// legible regardless of how bright the underlying illustration is.
+function SceneImage({ src, duration }: { src: string; duration: number }) {
+  const frame = useCurrentFrame();
+  const scale = interpolate(frame, [0, Math.max(duration, 1)], [1, 1.08], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  return (
+    <AbsoluteFill style={{ overflow: "hidden" }}>
+      <Img
+        src={staticFile(src)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `scale(${scale})`,
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.55) 100%)",
+        }}
+      />
+    </AbsoluteFill>
   );
 }
 
@@ -130,7 +163,8 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
   const captionOpacity = Math.min(captionEntrance, exit);
   const captionTranslateY = interpolate(captionEntrance, [0, 1], [40, 0]);
 
-  const icons = SCENE_ICONS[episodeNumber]?.[scene.index] ?? [];
+  const imageSrc = SCENE_IMAGES[episodeNumber]?.[scene.index];
+  const icons = imageSrc ? [] : SCENE_ICONS[episodeNumber]?.[scene.index] ?? [];
 
   const narrationSrc = manifest.narration[String(scene.index + 1)];
 
@@ -144,7 +178,11 @@ export const Scene: React.FC<{ scene: SceneRange; episodeNumber: string }> = ({
     >
       {narrationSrc ? <Audio src={staticFile(narrationSrc)} /> : null}
 
-      <AmbientBackground frame={frame} seed={scene.index} duration={scene.durationInFrames} />
+      {imageSrc ? (
+        <SceneImage src={imageSrc} duration={scene.durationInFrames} />
+      ) : (
+        <AmbientBackground frame={frame} seed={scene.index} duration={scene.durationInFrames} />
+      )}
 
       {/* timecode chip — forced LTR, matching the tcCell() convention in generate_episode.js.
           Physical `left`, not `insetInlineStart`: under this component's direction:rtl,

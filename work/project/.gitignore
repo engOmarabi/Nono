@@ -2,3 +2,5 @@ node_modules/
 output/*.docx
 *.pdf
 *.jpg
+# ...except the generated episode illustrations, which are real committed assets.
+!video/public/images/*.jpg

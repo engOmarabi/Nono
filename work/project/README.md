@@ -60,11 +60,14 @@ the `.docx` output.
 ```
 video/
   src/timing.ts        ← parses "mm:ss–mm:ss" into frame ranges (fps=30)
-  src/Scene.tsx         ← one scene = title/visual text + narration caption + timecode chip
+  src/Scene.tsx         ← one scene = art (image or icon) + narration caption + timecode chip
   src/Episode.tsx        ← <Series> of scenes + optional background music bed
   src/Root.tsx            ← registers the "Episode" composition (currently wired to episode-01.json)
+  src/sceneImages.ts       ← per-scene generated illustration, keyed by episode number
+  src/sceneVisuals.ts       ← per-scene icon fallback (src/icons.tsx) for scenes with no image yet
   scripts/generate_narration.py ← calls Gemini TTS per scene, writes public/audio/scene-N.wav
   scripts/generate-manifest.mjs ← scans public/audio + public/music, writes public/manifest.json
+  public/images/                ← generated scene illustrations (committed — see note below)
   public/manifest.json          ← which narration/music files actually exist (gitignored, regenerated)
 ```
 
@@ -97,6 +100,21 @@ npm run render        # runs the manifest script, then renders out/episode.mp4
   download its own (the default download host isn't in the network
   allowlist here). On a machine with normal internet access, delete that
   config line and Remotion will download its own Chromium on first render.
+- **Scene art is never the raw `visual` field.** That field is a director's
+  note for an illustrator (e.g. "شارة افتتاحية... حقيبة سوداء قديمة تظهر في
+  المنتصف"), not on-screen content — rendering it as literal text made early
+  drafts of this PoC look like storyboard notes, not video. `Scene.tsx` shows
+  a real generated illustration from `public/images/` when `sceneImages.ts`
+  has one for that scene, falling back to a hand-drawn icon (`icons.tsx` /
+  `sceneVisuals.ts`) otherwise. AI image generation from inside this sandbox
+  was tried first (`gemini-3.1-flash-image`, same key as the TTS call) but
+  its free-tier quota is 0 — it requires enabling real billing, which the
+  project owner declined. The episode-01 illustrations were instead
+  generated externally (Bing Image Creator, free, no API key) from prompts
+  derived from each scene's `visual` field, downloaded, and committed here —
+  they're real assets, not a regenerable build artifact, so unlike the audio
+  they are **not** gitignored (the project `.gitignore`'s blanket `*.jpg`
+  rule has a `!video/public/images/*.jpg` exception for this).
 - **Background music is not wired up yet.** `Episode.tsx` already supports it
   (`public/manifest.json.music`, looped under the narration) — it's a matter
   of dropping a royalty-free track (Pixabay Music / YouTube Audio Library)
